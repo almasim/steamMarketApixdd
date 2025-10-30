@@ -22,7 +22,11 @@ last_item_price = None
 paused = False
 running = True
 
+FETCH_INTERVAL = 60  # in seconds (2 minutes)
+last_fetch_time = None
+
 def FetchMarket():
+    print("trying to fetch market data...")
     try:
         with urlopen(MARKET_LINK) as response:
             return response.read()
@@ -41,18 +45,30 @@ def FetchMarket():
     
 def ParseData(raw_json):
     global last_item_name, last_item_price
-    
+    print("parsing market data...")
     try:
         data=json.loads(raw_json)
         if not data.get('success'):
             print("⚠️ Unsuccessful response from Steam API.")
             return
         
+        results = data.get("results", [])
+        if not results:
+            print("⚠️ No results found.")
+            return
+
+        keywords = ["karambit", "butterfly", "flip", "doppler", "m9", "bayonet", "fade", "tigertooth", "crimson", "marble", "gamma", "slaughter", "ultraviolet", "stiletto"]
+        for item in results:
+            name = item.get("name", "").lower()
+            if any(keyword in name for keyword in keywords):
+                print(f"🔗 Keyword match found: {item.get('name')}")
+                makeOpenUrl(item.get("name"))
+        
         result = data.get("results", [{}])[0]
         name = result.get("name")
         sell_int = result.get("sell_price")
         sell_text = result.get("sell_price_text")
-        possible_sell_price=(sell_int - 960) / 100 if sell_int is not None else None
+        possible_sell_price=(sell_int - 970) / 100 if sell_int is not None else None
         
         if name is None or sell_int is None:
             print("⚠️ Incomplete data received.")
@@ -68,11 +84,15 @@ def ParseData(raw_json):
         if possible_sell_price < MAX_PRICE:
             makeOpenUrl(name)
             
+        if last_item_name == name and last_item_price == sell_int:
+            print("No change in item data.")
+        
     except Exception as e:
         print(f"Error parsing data: {e}")
         return
 
 def makeOpenUrl(name):
+    print("✅ Item found below max price! Opening in browser...")
     base_url = "https://steamcommunity.com/market/listings/730/"
     encoded_name = urllib.parse.quote(name)
     
@@ -81,13 +101,21 @@ def makeOpenUrl(name):
     webbrowser.open(full_url)
         
 def PriceCheckLoop():
-    print("✅ Price monitoring started. Checking every 5 minutes.\n")
+    print("✅ Price monitoring started. Checking every 2 minutes.\n")
     
-    while True:
+    while running:
         raw=FetchMarket()
         if raw:
             ParseData(raw)
-        time.sleep(5*60)  # Check every 5 minutes
+        for remaining in range(FETCH_INTERVAL, 0, -1):
+            if not running:
+                break
+            mins, secs = divmod(remaining, 60)
+            timer = f"Next fetch in {mins:02d}:{secs:02d}"
+            print(f"\r{timer}", end="", flush=True)
+            time.sleep(1)
+        print("\r" + " " * 40 + "\r", end="")  # clear line before next log
+        
         
 def keyboard_listener():
     """Listens for keyboard input."""
