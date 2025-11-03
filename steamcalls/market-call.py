@@ -57,7 +57,7 @@ def ParseData(raw_json):
             print("⚠️ No results found.")
             return
 
-        keywords = ["karambit", "butterfly", "flip", "doppler", "m9", "bayonet", "fade", "tigertooth", "crimson", "marble", "gamma", "slaughter", "ultraviolet", "stiletto"]
+        keywords = ["karambit", "butterfly", "flip", "doppler", "m9", "bayonet", "fade", "tigertooth", "crimson", "marble", "gamma", "slaughter", "stiletto"]
         for item in results:
             name = item.get("name", "").lower()
             if any(keyword in name for keyword in keywords):
