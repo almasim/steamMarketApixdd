@@ -19,14 +19,15 @@ MAX_PRICE=int(MAX_PRICE)
 last_item_name = None
 last_item_price = None
 
+no_change_counter = 0
+
 paused = False
 running = True
 
-FETCH_INTERVAL = 60  # in seconds (2 minutes)
+FETCH_INTERVAL = 30  # in seconds (2 minutes)
 last_fetch_time = None
 
 def FetchMarket():
-    print("trying to fetch market data...")
     try:
         with urlopen(MARKET_LINK) as response:
             return response.read()
@@ -44,8 +45,7 @@ def FetchMarket():
 
     
 def ParseData(raw_json):
-    global last_item_name, last_item_price
-    print("parsing market data...")
+    global last_item_name, last_item_price, no_change_counter
     try:
         data=json.loads(raw_json)
         if not data.get('success'):
@@ -78,14 +78,18 @@ def ParseData(raw_json):
             print(f"Item Name: {name}")
             print(f"Item sell price: {sell_text}")
             print(f"Possible sell price: ${possible_sell_price:.2f}")
+            print(f"Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"----------------------------------------------------------------------")
             last_item_name = name
             last_item_price = sell_int
+            no_change_counter = 0
         
         if possible_sell_price < MAX_PRICE:
             makeOpenUrl(name)
             
         if last_item_name == name and last_item_price == sell_int:
-            print("No change in item data.")
+            no_change_counter += 1
+            # print(f"\rNo change in item data... ({no_change_counter})", end="", flush=True)
         
     except Exception as e:
         print(f"Error parsing data: {e}")
@@ -102,7 +106,7 @@ def makeOpenUrl(name):
         
 def PriceCheckLoop():
     print("✅ Price monitoring started. Checking every 2 minutes.\n")
-    
+    global no_change_counter
     while running:
         raw=FetchMarket()
         if raw:
@@ -112,7 +116,8 @@ def PriceCheckLoop():
                 break
             mins, secs = divmod(remaining, 60)
             timer = f"Next fetch in {mins:02d}:{secs:02d}"
-            print(f"\r{timer}", end="", flush=True)
+            from_move = f"No change ({no_change_counter})" if no_change_counter > 0 else ""
+            print(f"\r{timer}   {from_move}", end="", flush=True)
             time.sleep(1)
         print("\r" + " " * 40 + "\r", end="")  # clear line before next log
         
