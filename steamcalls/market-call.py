@@ -6,6 +6,7 @@ from urllib.request import urlopen
 import urllib.parse
 import webbrowser
 import threading
+import requests
 import datetime
 import sys
 
@@ -13,6 +14,9 @@ load_dotenv(override=True)
 
 MARKET_LINK=os.getenv("MARKET_ASC_UNUSUAL_LINK")
 MAX_PRICE=os.getenv("MAX_PRICE")
+DISCORD_WEBHOOK=os.getenv("DISCORD_WEBHOOK_URL")
+TELEGRAM_TOKEN=os.getenv("TELEGRAM_TOKEN")
+TELEGRAM_CHAT_ID=os.getenv("TELEGRAM_CHAT_ID")
 MAX_PRICE=int(MAX_PRICE) 
 
 # Caches so we don't repeat spam output
@@ -85,7 +89,7 @@ def ParseData(raw_json):
             no_change_counter = 0
         
         if possible_sell_price < MAX_PRICE:
-            makeOpenUrl(name)
+            makeOpenUrl(name,possible_sell_price)
             
         if last_item_name == name and last_item_price == sell_int:
             no_change_counter += 1
@@ -95,14 +99,79 @@ def ParseData(raw_json):
         print(f"Error parsing data: {e}")
         return
 
-def makeOpenUrl(name):
+def makeOpenUrl(name,possible_sell_price):
     print("✅ Item found below max price! Opening in browser...")
     base_url = "https://steamcommunity.com/market/listings/730/"
     encoded_name = urllib.parse.quote(name)
     
+    
     full_url = base_url + encoded_name
+    sendDiscordNotification(name, possible_sell_price,full_url)
+    sendTelegramNotification(name, possible_sell_price,full_url)
     print(f"➡️ Opened listing for '{name}' in browser.")
     webbrowser.open(full_url)
+    
+def sendTelegramNotification(item_name, item_price, item_url):
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    message = (
+        f"*✅ Steam Market Alert!*\n\n"
+        f"*Item:* {item_name}\n"
+        f"*Price:* `{item_price}`\n"
+        f"[Open on Steam]({item_url})"
+    )
+
+    data = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": message,
+        "parse_mode": "Markdown",
+        "disable_notification": False,
+        "disable_web_page_preview": True,
+    }
+
+    try:
+        requests.post(url, json=data)
+        print("Telegram notification sent.")
+    except Exception as e:
+        print("Telegram error:", e)
+
+    
+def sendDiscordNotification(item_name, item_price, item_url):
+    name = str(item_name)
+    price = str(item_price)
+    url = str(item_url)
+
+    embed = {
+        "title": name,
+        "url": url,
+        "color": 3447003,
+        "fields": [
+            {
+                "name": "Price",
+                "value": price+"Euro",
+                "inline": True
+            },
+            {
+                "name": "Link",
+                "value": f"[Open on Steam]({url})",
+                "inline": False
+            }
+        ],
+        "footer": {
+            "text": "Steam Market Monitor"
+        }
+    }
+
+    data = {
+        "content": "@everyone",
+        "embeds": [embed],
+        "allowed_mentions": {
+            "parse": ["everyone"]
+        }
+    }
+
+    r = requests.post(DISCORD_WEBHOOK, json=data)
+    print("Discord notification sent.")
+    print("Status:", r.status_code, "Response:", r.text)
         
 def PriceCheckLoop():
     print("✅ Price monitoring started. Checking every 2 minutes.\n")
